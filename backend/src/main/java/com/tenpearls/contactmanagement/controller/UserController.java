@@ -6,6 +6,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -35,6 +36,11 @@ public class UserController {
                     user.getPassword() == null || user.getPassword().trim().isEmpty()) {
                 response.put("status", "error");
                 response.put("message", "Name, email, and password are required");
+                return new ResponseEntity<>(response, HttpStatus.BAD_REQUEST);
+            }
+            if (passwordExceedsMaxLength(user.getPassword())) {
+                response.put("status", "error");
+                response.put("message", "Password must not exceed 72 UTF-8 bytes");
                 return new ResponseEntity<>(response, HttpStatus.BAD_REQUEST);
             }
 
@@ -120,6 +126,11 @@ public class UserController {
                 response.put("message", "Replacement password is required");
                 return new ResponseEntity<>(response, HttpStatus.BAD_REQUEST);
             }
+            if (passwordExceedsMaxLength(replacementPassword)) {
+                response.put("status", "error");
+                response.put("message", "Password must not exceed 72 UTF-8 bytes");
+                return new ResponseEntity<>(response, HttpStatus.BAD_REQUEST);
+            }
 
             // Find user by email
             Optional<User> userInDb = userService.getByEmail(user.getEmail());
@@ -162,5 +173,9 @@ public class UserController {
                 .createdAt(user.getCreatedAt())
                 .password(null)
                 .build();
+    }
+
+    private boolean passwordExceedsMaxLength(String password) {
+        return password.getBytes(StandardCharsets.UTF_8).length > 72;
     }
 }
