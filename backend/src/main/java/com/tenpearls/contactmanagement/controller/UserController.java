@@ -27,6 +27,8 @@ public class UserController {
         Map<String, Object> response = new HashMap<>();
 
         try {
+            user.setId(null);
+
             // Validate required fields
             if (user.getName() == null || user.getName().trim().isEmpty() ||
                     user.getEmail() == null || user.getEmail().trim().isEmpty() ||
@@ -45,11 +47,11 @@ public class UserController {
 
             // Save user and hide password in response
             User savedUser = userService.createUser(user);
-            savedUser.setPassword(null);
+            User responseUser = safeUserResponse(savedUser);
 
             response.put("status", "success");
             response.put("message", "User registered successfully");
-            response.put("user", savedUser);
+            response.put("user", responseUser);
             return new ResponseEntity<>(response, HttpStatus.CREATED);
 
         } catch (Exception e) {
@@ -72,36 +74,36 @@ public class UserController {
             if (userEmail == null || userEmail.trim().isEmpty() ||
                     userPassword == null || userPassword.trim().isEmpty()) {
                 response.put("status", "error");
-                response.put("message", "Email and password are required");
-                return new ResponseEntity<>(response, HttpStatus.BAD_REQUEST);
+                response.put("message", "Invalid email or password");
+                return new ResponseEntity<>(response, HttpStatus.UNAUTHORIZED);
             }
 
             // Find user by email
             Optional<User> emailInDb = userService.getByEmail(userEmail);
             if (emailInDb.isEmpty()) {
                 response.put("status", "error");
-                response.put("message", "User not found with this email");
+                response.put("message", "Invalid email or password");
                 return new ResponseEntity<>(response, HttpStatus.UNAUTHORIZED);
             }
 
             // Verify password
             User loggedInUser = emailInDb.get();
-            if (!loggedInUser.getPassword().equals(userPassword)) {
+            if (!userService.verifyPassword(userPassword, loggedInUser.getPassword())) {
                 response.put("status", "error");
-                response.put("message", "Incorrect password");
+                response.put("message", "Invalid email or password");
                 return new ResponseEntity<>(response, HttpStatus.UNAUTHORIZED);
             }
 
             // Return user details without password
-            loggedInUser.setPassword(null);
+            User responseUser = safeUserResponse(loggedInUser);
             response.put("status", "success");
             response.put("message", "Login successful");
-            response.put("user", loggedInUser);
+            response.put("user", responseUser);
             return new ResponseEntity<>(response, HttpStatus.OK);
 
         } catch (Exception e) {
             response.put("status", "error");
-            response.put("message", "Login failed: " + e.getMessage());
+            response.put("message", "Login failed");
             return new ResponseEntity<>(response, HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
@@ -112,23 +114,34 @@ public class UserController {
         Map<String, Object> response = new HashMap<>();
 
         try {
+            String replacementPassword = user.getPassword();
+            if (replacementPassword == null || replacementPassword.trim().isEmpty()) {
+                response.put("status", "error");
+                response.put("message", "Replacement password is required");
+                return new ResponseEntity<>(response, HttpStatus.BAD_REQUEST);
+            }
+
             // Find user by email
             Optional<User> userInDb = userService.getByEmail(user.getEmail());
 
             if (userInDb.isEmpty()) {
                 response.put("status", "error");
-                response.put("message", "User not found with this email");
-                return new ResponseEntity<>(response, HttpStatus.NOT_FOUND);
+                response.put("message", "Password update denied");
+                return new ResponseEntity<>(response, HttpStatus.UNAUTHORIZED);
             }
 
             // Get existing user from database
             User existingUser = userInDb.get();
 
-            // Update password (encode here if using BCrypt)
-            existingUser.setPassword(user.getPassword());
+            // Require proof of control of the target account before changing anything.
+            if (user.getCurrentPassword() == null
+                    || !userService.verifyPassword(user.getCurrentPassword(), existingUser.getPassword())) {
+                response.put("status", "error");
+                response.put("message", "Password update denied");
+                return new ResponseEntity<>(response, HttpStatus.UNAUTHORIZED);
+            }
 
-            // Save updated user to database
-            userService.createUser(existingUser);
+            userService.updatePassword(existingUser, replacementPassword);
 
             response.put("status", "success");
             response.put("message", "Password updated successfully");
@@ -136,10 +149,18 @@ public class UserController {
 
         } catch (Exception e) {
             response.put("status", "error");
-            response.put("message", "Failed to update password: " + e.getMessage());
+            response.put("message", "Password update failed");
             return new ResponseEntity<>(response, HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 
-
+    private User safeUserResponse(User user) {
+        return User.builder()
+                .id(user.getId())
+                .name(user.getName())
+                .email(user.getEmail())
+                .createdAt(user.getCreatedAt())
+                .password(null)
+                .build();
+    }
 }
