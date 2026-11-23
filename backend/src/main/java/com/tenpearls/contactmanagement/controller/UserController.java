@@ -2,6 +2,7 @@ package com.tenpearls.contactmanagement.controller;
 
 import com.tenpearls.contactmanagement.model.User;
 import com.tenpearls.contactmanagement.services.UserService;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -38,6 +39,16 @@ public class UserController {
                 response.put("message", "Name, email, and password are required");
                 return new ResponseEntity<>(response, HttpStatus.BAD_REQUEST);
             }
+            if (user.getName().trim().length() > 50) {
+                response.put("status", "error");
+                response.put("message", "Name must not exceed 50 characters");
+                return new ResponseEntity<>(response, HttpStatus.BAD_REQUEST);
+            }
+            if (user.getEmail().trim().length() > 100) {
+                response.put("status", "error");
+                response.put("message", "Email must not exceed 100 characters");
+                return new ResponseEntity<>(response, HttpStatus.BAD_REQUEST);
+            }
             if (passwordExceedsMaxLength(user.getPassword())) {
                 response.put("status", "error");
                 response.put("message", "Password must not exceed 72 UTF-8 bytes");
@@ -60,6 +71,10 @@ public class UserController {
             response.put("user", responseUser);
             return new ResponseEntity<>(response, HttpStatus.CREATED);
 
+        } catch (DataIntegrityViolationException e) {
+            response.put("status", "error");
+            response.put("message", "Email is already registered");
+            return new ResponseEntity<>(response, HttpStatus.CONFLICT);
         } catch (Exception e) {
             response.put("status", "error");
             response.put("message", "Registration failed: " + e.getMessage());
