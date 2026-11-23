@@ -107,6 +107,8 @@ public class UserController {
                 return new ResponseEntity<>(response, HttpStatus.UNAUTHORIZED);
             }
 
+            userEmail = userEmail.trim();
+
             // Find user by email
             Optional<User> emailInDb = userService.getByEmail(userEmail);
             if (emailInDb.isEmpty()) {
@@ -156,7 +158,8 @@ public class UserController {
             }
 
             // Find user by email
-            Optional<User> userInDb = userService.getByEmail(user.getEmail());
+            String email = user.getEmail() != null ? user.getEmail().trim() : null;
+            Optional<User> userInDb = userService.getByEmail(email);
 
             if (userInDb.isEmpty()) {
                 response.put("status", "error");
